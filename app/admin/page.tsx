@@ -3,6 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adjustPoints } from "./actions";
+import LoginLinkButton from "./login-link-button";
+import NewCustomerForm from "./new-customer-form";
 
 type SearchParams = Promise<{ error?: string; message?: string }>;
 
@@ -23,21 +25,21 @@ export default async function AdminPage({
   const { data: me } = await supabase
     .from("profiles")
     .select("role")
-    .eq("id", user.id)
+    .eq("user_id", user.id)
     .single();
   if (me?.role !== "admin") redirect("/dashboard");
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name, phone, role")
+    .select("id, full_name, email, phone, role, user_id")
     .order("full_name", { ascending: true });
 
   const { data: balances } = await supabase
     .from("user_point_balances")
-    .select("user_id, balance");
+    .select("profile_id, balance");
 
   const balanceMap = new Map(
-    (balances ?? []).map((b) => [b.user_id, b.balance]),
+    (balances ?? []).map((b) => [b.profile_id, b.balance]),
   );
 
   const fieldClass =
@@ -64,6 +66,8 @@ export default async function AdminPage({
         </Link>
       </header>
 
+      <NewCustomerForm />
+
       {sp.error && (
         <p className="mb-4 rounded-md bg-brand-terracotta/10 px-3 py-2 text-sm text-brand-terracotta">
           {sp.error}
@@ -79,13 +83,18 @@ export default async function AdminPage({
       <section className="mb-10 rounded-xl border border-border bg-surface p-5 shadow-sm">
         <h2 className="mb-4 text-sm font-medium">Pont jóváírása / levonása</h2>
         <form action={adjustPoints} className="flex flex-col gap-3">
-          <select name="user_id" required defaultValue="" className={fieldClass}>
+          <select
+            name="profile_id"
+            required
+            defaultValue=""
+            className={fieldClass}
+          >
             <option value="" disabled>
-              Válassz ügyfelet…
+              Válassz vásárlót…
             </option>
             {(profiles ?? []).map((p) => (
               <option key={p.id} value={p.id}>
-                {p.full_name ?? "(névtelen)"} — {balanceMap.get(p.id) ?? 0} pont
+                {p.full_name} — {balanceMap.get(p.id) ?? 0} pont
               </option>
             ))}
           </select>
@@ -121,27 +130,40 @@ export default async function AdminPage({
         </form>
       </section>
 
-      {/* Ügyféllista */}
+      {/* Vásárlólista */}
       <h2 className="mb-3 text-sm font-medium text-muted">
-        Ügyfelek ({profiles?.length ?? 0})
+        Vásárlók ({profiles?.length ?? 0})
       </h2>
       <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-surface px-4">
         {(profiles ?? []).map((p) => (
-          <li key={p.id} className="flex items-center justify-between py-3">
-            <div>
+          <li
+            key={p.id}
+            className="flex items-start justify-between gap-4 py-3"
+          >
+            <div className="min-w-0">
               <p className="text-sm">
-                {p.full_name ?? "(névtelen)"}
+                {p.full_name}
                 {p.role === "admin" && (
                   <span className="ml-2 rounded bg-brand-ochre/20 px-1.5 py-0.5 text-xs text-brand-brown">
                     admin
                   </span>
                 )}
+                {!p.email && (
+                  <span className="ml-2 rounded bg-border/60 px-1.5 py-0.5 text-xs text-muted">
+                    csak telefonos
+                  </span>
+                )}
               </p>
+              {p.email && <p className="truncate text-xs text-muted">{p.email}</p>}
               {p.phone && <p className="text-xs text-muted">{p.phone}</p>}
             </div>
-            <span className="font-medium tabular-nums">
-              {balanceMap.get(p.id) ?? 0} pont
-            </span>
+
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <span className="font-medium tabular-nums">
+                {balanceMap.get(p.id) ?? 0} pont
+              </span>
+              {p.email && <LoginLinkButton profileId={p.id} />}
+            </div>
           </li>
         ))}
       </ul>

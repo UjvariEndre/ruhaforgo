@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,33 +20,26 @@ export async function login(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function signup(formData: FormData) {
-  const supabase = await createClient();
-  const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-  const full_name = String(formData.get("full_name") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim();
+// Publikus regisztráció nincs: fiókot Tündi hoz létre az admin felületen, a
+// vásárló pedig a kapott linken állít magának jelszót.
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { full_name, phone } },
+export async function requestPasswordReset(formData: FormData) {
+  const supabase = await createClient();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+
+  const headerList = await headers();
+  const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
+  const proto = headerList.get("x-forwarded-proto") ?? "https";
+
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${proto}://${host}/auth/confirm?next=/auth/jelszo`,
   });
 
-  if (error) {
-    redirect(
-      `/login?mode=register&error=${encodeURIComponent(error.message)}`,
-    );
-  }
-
-  // Ha a projektben be van kapcsolva az e-mail megerősítés, nincs azonnali
-  // session – ilyenkor a felhasználónak meg kell erősítenie az e-mailjét.
-  if (!data.session) {
-    redirect("/login?message=confirm");
-  }
-
-  revalidatePath("/", "layout");
-  redirect("/dashboard");
+  // Szándékosan nem áruljuk el, hogy létezik-e ilyen cím: a visszajelzés
+  // ugyanaz akkor is, ha nem küldtünk semmit.
+  redirect("/login/elfelejtett?message=sent");
 }
 
 export async function signOut() {

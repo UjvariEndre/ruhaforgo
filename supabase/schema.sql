@@ -2,14 +2,20 @@
 -- ruhaforgó – adatbázis séma (Supabase / PostgreSQL)
 -- ----------------------------------------------------------------------------
 -- Futtasd le a Supabase projektedben: Dashboard → SQL Editor → New query →
--- másold be ezt az egészet → Run.  Idempotens, többször is lefuttatható.
+-- másold be ezt az egészet → Run.  Idempotens, többször is lefuttatható, és
+-- NEM töröl adatot.
 --
 -- Modell:
---   * auth.users            – Supabase Auth kezeli (e-mail/jelszó regisztráció)
---   * public.profiles       – felhasználói adatok + szerep (customer | admin)
---   * public.point_transactions – MINDEN pontmozgás egy-egy sor (ledger):
---                                 delta > 0  → jóváírás (behozott ruha után)
---                                 delta < 0  → levonás  (vásárláskor beváltva)
+--   * public.profiles       – MINDEN vásárló, akár van fiókja, akár nincs.
+--                             Tündi hozza létre az admin felületen.
+--                             user_id IS NULL → nincs belépésre alkalmas fiók
+--                             (telefonos vásárló), csak Tündi látja.
+--   * auth.users            – Supabase Auth; csak azoknak, akiknek van e-mail
+--                             címük és meghívót kaptak.  Publikus regisztráció
+--                             NINCS.
+--   * public.point_transactions  – MINDEN pontmozgás egy-egy sor (ledger):
+--                                  delta > 0 → jóváírás (behozott ruha után)
+--                                  delta < 0 → levonás  (vásárláskor beváltva)
 --   * public.user_point_balances – nézet: aktuális egyenleg = SUM(delta)
 -- ============================================================================
 
@@ -17,22 +23,31 @@
 -- 1. PROFILES
 -- ---------------------------------------------------------------------------
 create table if not exists public.profiles (
-  id         uuid primary key references auth.users (id) on delete cascade,
-  full_name  text,
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid unique references auth.users (id) on delete set null,
+  full_name  text not null,
+  email      text,
   phone      text,
   role       text not null default 'customer'
              check (role in ('customer', 'admin')),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Az e-mail az elsődleges, de telefonszám is elég: e-mail nélkül a vásárló
+  -- nem tud belépni, a pontjait Tündi vezeti.
+  constraint profiles_email_or_phone check (email is not null or phone is not null)
 );
 
-comment on table public.profiles is 'Regisztrált felhasználók profilja; 1:1 az auth.users-szel.';
+comment on table public.profiles is 'Vásárlók. user_id IS NULL → nincs belépésre alkalmas fiók, csak Tündi kezeli.';
+
+-- Egy e-mail cím csak egy vásárlóhoz tartozhat (kis/nagybetűtől függetlenül).
+create unique index if not exists profiles_email_unique_idx
+  on public.profiles (lower(email)) where email is not null;
 
 -- ---------------------------------------------------------------------------
 -- 2. POINT TRANSACTIONS (ledger)
 -- ---------------------------------------------------------------------------
 create table if not exists public.point_transactions (
   id         bigint generated always as identity primary key,
-  user_id    uuid not null references public.profiles (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
   delta      integer not null,                 -- + jóváírás / - levonás
   reason     text,                             -- pl. "Levi's farmerdzseki", "Vásárlás 2026-07-08"
   created_by uuid references public.profiles (id),  -- ki rögzítette (admin)
@@ -42,12 +57,22 @@ create table if not exists public.point_transactions (
 
 comment on table public.point_transactions is 'Pontmozgások naplója; az egyenleg ezek összege.';
 
-create index if not exists point_transactions_user_id_idx
-  on public.point_transactions (user_id, created_at desc);
+create index if not exists point_transactions_profile_id_idx
+  on public.point_transactions (profile_id, created_at desc);
 
 -- ---------------------------------------------------------------------------
--- 3. HELPER: is_admin()  (SECURITY DEFINER, hogy ne legyen RLS-rekurzió)
+-- 3. HELPEREK  (SECURITY DEFINER, hogy ne legyen RLS-rekurzió)
 -- ---------------------------------------------------------------------------
+create or replace function public.current_profile_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select id from public.profiles where user_id = auth.uid();
+$$;
+
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -57,7 +82,7 @@ set search_path = public
 as $$
   select exists (
     select 1 from public.profiles
-    where id = auth.uid() and role = 'admin'
+    where user_id = auth.uid() and role = 'admin'
   );
 $$;
 
@@ -67,61 +92,27 @@ $$;
 create or replace view public.user_point_balances
 with (security_invoker = on) as
   select
-    p.id                          as user_id,
+    p.id                           as profile_id,
     coalesce(sum(t.delta), 0)::int as balance
   from public.profiles p
-  left join public.point_transactions t on t.user_id = p.id
+  left join public.point_transactions t on t.profile_id = p.id
   group by p.id;
 
 -- ---------------------------------------------------------------------------
--- 5. ÚJ FELHASZNÁLÓ → automatikus profil létrehozása
+-- 5. RÉGI, MÁR NEM KELLŐ AUTOMATIZMUSOK ELTÁVOLÍTÁSA
 -- ---------------------------------------------------------------------------
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.profiles (id, full_name, phone)
-  values (
-    new.id,
-    new.raw_user_meta_data ->> 'full_name',
-    new.raw_user_meta_data ->> 'phone'
-  );
-  return new;
-end;
-$$;
-
+-- Régen a publikus regisztráció hozta létre a profilt egy auth.users trigger-rel.
+-- Most Tündi hozza létre a profilt ELŐBB, és az auth-fiók (ha van e-mail) utólag
+-- kapcsolódik hozzá – a trigger csak duplikált profilt csinálna.
 drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
+drop function if exists public.handle_new_user();
 
--- ---------------------------------------------------------------------------
--- 6. SZEREP-VÉDELEM: ügyfél ne tudja saját magát adminná tenni
--- ---------------------------------------------------------------------------
-create or replace function public.protect_role_change()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if new.role is distinct from old.role and not public.is_admin() then
-    raise exception 'Csak admin változtathat szerepet';
-  end if;
-  return new;
-end;
-$$;
-
+-- A szerep-védő trigger fölöslegessé vált: profilt csak admin írhat (7. pont).
 drop trigger if exists protect_profile_role on public.profiles;
-create trigger protect_profile_role
-  before update on public.profiles
-  for each row execute function public.protect_role_change();
+drop function if exists public.protect_role_change();
 
 -- ---------------------------------------------------------------------------
--- 7. ROW LEVEL SECURITY
+-- 6. ROW LEVEL SECURITY
 -- ---------------------------------------------------------------------------
 alter table public.profiles           enable row level security;
 alter table public.point_transactions enable row level security;
@@ -129,17 +120,27 @@ alter table public.point_transactions enable row level security;
 -- profiles: mindenki a sajátját látja, admin mindenkiét
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles
-  for select using (auth.uid() = id or public.is_admin());
+  for select using (user_id = auth.uid() or public.is_admin());
 
--- profiles: saját profil frissítése (a role-t a 6. pont trigger védi), admin bárkit
+-- profiles: írni CSAK admin tud (a vásárló nem szerkeszti magát)
+drop policy if exists profiles_insert on public.profiles;
+create policy profiles_insert on public.profiles
+  for insert with check (public.is_admin());
+
 drop policy if exists profiles_update on public.profiles;
 create policy profiles_update on public.profiles
-  for update using (auth.uid() = id or public.is_admin());
+  for update using (public.is_admin());
+
+drop policy if exists profiles_delete on public.profiles;
+create policy profiles_delete on public.profiles
+  for delete using (public.is_admin());
 
 -- point_transactions: saját mozgások olvashatók, admin mindet látja
 drop policy if exists tx_select on public.point_transactions;
 create policy tx_select on public.point_transactions
-  for select using (user_id = auth.uid() or public.is_admin());
+  for select using (
+    profile_id = public.current_profile_id() or public.is_admin()
+  );
 
 -- point_transactions: CSAK admin írhat/módosíthat/törölhet
 drop policy if exists tx_insert on public.point_transactions;
@@ -155,8 +156,16 @@ create policy tx_delete on public.point_transactions
   for delete using (public.is_admin());
 
 -- ============================================================================
--- KÉSZ.  Miután Tündi regisztrált az appban, tedd adminná (cseréld ki az e-mailt):
+-- KÉSZ.
+--
+-- Publikus regisztráció nincs, ezért az ELSŐ admint kézzel kell felvenni.
+-- Ha az auth-fiókod már létezik (mert korábban regisztráltál), csak jelöld meg:
 --
 --   update public.profiles set role = 'admin'
---   where id = (select id from auth.users where email = 'tundi@example.com');
+--   where user_id = (select id from auth.users where email = 'tundi@example.com');
+--
+-- Ha még nincs fiókja: Dashboard → Authentication → Users → Add user, majd
+--
+--   insert into public.profiles (user_id, full_name, email, role)
+--   select id, 'Tündi', email, 'admin' from auth.users where email = 'tundi@example.com';
 -- ============================================================================

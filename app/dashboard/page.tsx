@@ -14,24 +14,32 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role")
-    .eq("id", user.id)
+    .select("id, full_name, role")
+    .eq("user_id", user.id)
     .single();
+
+  // Fiók profil nélkül nem fordulhat elő normál működés közben, de ha a
+  // profilhoz kötés valamiért elmaradt, itt ne UUID-hibával szálljon el.
+  if (!profile) {
+    redirect(
+      `/login?error=${encodeURIComponent("Ehhez a fiókhoz nem tartozik vásárló. Szólj Tündinek.")}`,
+    );
+  }
 
   const { data: balanceRow } = await supabase
     .from("user_point_balances")
     .select("balance")
-    .eq("user_id", user.id)
+    .eq("profile_id", profile.id)
     .single();
 
   const { data: transactions } = await supabase
     .from("point_transactions")
     .select("id, delta, reason, created_at")
-    .eq("user_id", user.id)
+    .eq("profile_id", profile.id)
     .order("created_at", { ascending: false });
 
   const balance = balanceRow?.balance ?? 0;
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = profile.role === "admin";
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
@@ -46,7 +54,7 @@ export default async function DashboardPage() {
           />
           <div>
             <h1 className="text-lg font-semibold">
-              Szia, {profile?.full_name ?? user.email}!
+              Szia, {profile.full_name}!
             </h1>
             {isAdmin && (
               <Link

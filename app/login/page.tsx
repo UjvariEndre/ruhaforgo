@@ -1,9 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { login, signup } from "./actions";
+import { login } from "./actions";
 
 type SearchParams = Promise<{
-  mode?: string;
   error?: string;
   message?: string;
 }>;
@@ -14,7 +13,6 @@ export default async function LoginPage({
   searchParams: SearchParams;
 }) {
   const sp = await searchParams;
-  const isRegister = sp.mode === "register";
 
   const inputClass =
     "rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-green";
@@ -22,7 +20,7 @@ export default async function LoginPage({
   return (
     <main className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center">
+        <div className="mb-8 flex flex-col items-center">
           <Image
             src="/logo.jpg"
             alt="RuhaForgó"
@@ -36,62 +34,18 @@ export default async function LoginPage({
           </p>
         </div>
 
-        <div className="mb-6 flex rounded-lg border border-border bg-surface p-1 text-sm">
-          <Link
-            href="/login"
-            className={`flex-1 rounded-md py-1.5 text-center transition-colors ${
-              !isRegister
-                ? "bg-brand-green font-medium text-white"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            Bejelentkezés
-          </Link>
-          <Link
-            href="/login?mode=register"
-            className={`flex-1 rounded-md py-1.5 text-center transition-colors ${
-              isRegister
-                ? "bg-brand-green font-medium text-white"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            Regisztráció
-          </Link>
-        </div>
-
         {sp.error && (
           <p className="mb-4 rounded-md bg-brand-terracotta/10 px-3 py-2 text-sm text-brand-terracotta">
             {sp.error}
           </p>
         )}
-        {sp.message === "confirm" && (
+        {sp.message === "password-set" && (
           <p className="mb-4 rounded-md bg-brand-green/10 px-3 py-2 text-sm text-brand-green-dark">
-            Elküldtük a megerősítő e-mailt. Kattints a benne lévő linkre, majd
-            jelentkezz be.
+            A jelszavad elmentve. Jelentkezz be vele.
           </p>
         )}
 
-        <form
-          action={isRegister ? signup : login}
-          className="flex flex-col gap-3"
-        >
-          {isRegister && (
-            <>
-              <input
-                name="full_name"
-                type="text"
-                required
-                placeholder="Teljes név"
-                className={inputClass}
-              />
-              <input
-                name="phone"
-                type="tel"
-                placeholder="Telefonszám (opcionális)"
-                className={inputClass}
-              />
-            </>
-          )}
+        <form action={login} className="flex flex-col gap-3">
           <input
             name="email"
             type="email"
@@ -103,7 +57,6 @@ export default async function LoginPage({
             name="password"
             type="password"
             required
-            minLength={6}
             placeholder="Jelszó"
             className={inputClass}
           />
@@ -111,9 +64,22 @@ export default async function LoginPage({
             type="submit"
             className="mt-1 rounded-md bg-brand-green py-2 text-sm font-medium text-white transition-colors hover:bg-brand-green-dark"
           >
-            {isRegister ? "Fiók létrehozása" : "Belépés"}
+            Belépés
           </button>
         </form>
+
+        <div className="mt-6 flex flex-col items-center gap-2 text-center">
+          <Link
+            href="/login/elfelejtett"
+            className="text-sm text-muted underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Elfelejtetted a jelszavad?
+          </Link>
+          <p className="text-xs text-muted">
+            Még nincs fiókod? A pontgyűjtő fiókot a boltban hozzuk létre neked –
+            szólj Tündinek, és küldünk egy jelszó-beállító linket.
+          </p>
+        </div>
       </div>
     </main>
   );
