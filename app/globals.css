@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
+/* RuhaForgó – a logó visszafogott, meleg palettája */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6e9d2; /* krém, mint a logó háttere */
+  --surface: #fcf6ea; /* világosabb kártya-felület */
+  --foreground: #3b3a30; /* meleg, sötét szöveg */
+  --muted: #8a8270; /* halvány szöveg */
+  --border: #e2d3b6; /* lágy keret */
+
+  --brand-green: #5e7146; /* zsálya-zöld – fő szín */
+  --brand-green-dark: #4b5b38;
+  --brand-terracotta: #bc492e; /* levonás / figyelmeztetés */
+  --brand-ochre: #c99a46;
+  --brand-brown: #7a4a2b;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+
+  --color-brand-green: var(--brand-green);
+  --color-brand-green-dark: var(--brand-green-dark);
+  --color-brand-terracotta: var(--brand-terracotta);
+  --color-brand-ochre: var(--brand-ochre);
+  --color-brand-brown: var(--brand-brown);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }

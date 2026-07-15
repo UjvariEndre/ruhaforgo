@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ruhaforgó",
-  description: "Turkáló pontrendszer – Nyúl",
+  title: "RuhaForgó pontok kezelése",
+  description: "RuhaForgó pontok kezelése – Nyúl",
 };
 
 export default function RootLayout({

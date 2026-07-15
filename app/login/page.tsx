@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { login, signup } from "./actions";
 
@@ -15,27 +16,43 @@ export default async function LoginPage({
   const sp = await searchParams;
   const isRegister = sp.mode === "register";
 
+  const inputClass =
+    "rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-green";
+
   return (
     <main className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-sm">
-        <h1 className="text-center text-2xl font-semibold">ruhaforgó</h1>
-        <p className="mb-6 text-center text-sm text-black/50 dark:text-white/50">
-          Turkáló pontrendszer – Nyúl
-        </p>
+        <div className="mb-6 flex flex-col items-center">
+          <Image
+            src="/logo.jpg"
+            alt="RuhaForgó"
+            width={160}
+            height={160}
+            priority
+            className="h-32 w-32 rounded-2xl object-cover shadow-sm"
+          />
+          <p className="mt-3 text-center text-sm text-muted">
+            Pontok kezelése – Nyúl
+          </p>
+        </div>
 
-        <div className="mb-6 flex rounded-lg border border-black/10 p-1 text-sm dark:border-white/15">
+        <div className="mb-6 flex rounded-lg border border-border bg-surface p-1 text-sm">
           <Link
             href="/login"
-            className={`flex-1 rounded-md py-1.5 text-center ${
-              !isRegister ? "bg-foreground text-background" : ""
+            className={`flex-1 rounded-md py-1.5 text-center transition-colors ${
+              !isRegister
+                ? "bg-brand-green font-medium text-white"
+                : "text-muted hover:text-foreground"
             }`}
           >
             Bejelentkezés
           </Link>
           <Link
             href="/login?mode=register"
-            className={`flex-1 rounded-md py-1.5 text-center ${
-              isRegister ? "bg-foreground text-background" : ""
+            className={`flex-1 rounded-md py-1.5 text-center transition-colors ${
+              isRegister
+                ? "bg-brand-green font-medium text-white"
+                : "text-muted hover:text-foreground"
             }`}
           >
             Regisztráció
@@ -43,12 +60,12 @@ export default async function LoginPage({
         </div>
 
         {sp.error && (
-          <p className="mb-4 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+          <p className="mb-4 rounded-md bg-brand-terracotta/10 px-3 py-2 text-sm text-brand-terracotta">
             {sp.error}
           </p>
         )}
         {sp.message === "confirm" && (
-          <p className="mb-4 rounded-md bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400">
+          <p className="mb-4 rounded-md bg-brand-green/10 px-3 py-2 text-sm text-brand-green-dark">
             Elküldtük a megerősítő e-mailt. Kattints a benne lévő linkre, majd
             jelentkezz be.
           </p>
@@ -65,13 +82,13 @@ export default async function LoginPage({
                 type="text"
                 required
                 placeholder="Teljes név"
-                className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground dark:border-white/20"
+                className={inputClass}
               />
               <input
                 name="phone"
                 type="tel"
                 placeholder="Telefonszám (opcionális)"
-                className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground dark:border-white/20"
+                className={inputClass}
               />
             </>
           )}
@@ -80,7 +97,7 @@ export default async function LoginPage({
             type="email"
             required
             placeholder="E-mail"
-            className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground dark:border-white/20"
+            className={inputClass}
           />
           <input
             name="password"
@@ -88,11 +105,11 @@ export default async function LoginPage({
             required
             minLength={6}
             placeholder="Jelszó"
-            className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-foreground dark:border-white/20"
+            className={inputClass}
           />
           <button
             type="submit"
-            className="mt-1 rounded-md bg-foreground py-2 text-sm font-medium text-background hover:opacity-90"
+            className="mt-1 rounded-md bg-brand-green py-2 text-sm font-medium text-white transition-colors hover:bg-brand-green-dark"
           >
             {isRegister ? "Fiók létrehozása" : "Belépés"}
           </button>
