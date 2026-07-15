@@ -5,3 +5,7 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// Cloudflare (OpenNext) – helyi fejlesztéshez a binding-ok elérése.
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+initOpenNextCloudflareForDev();
