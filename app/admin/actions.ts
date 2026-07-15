@@ -123,8 +123,10 @@ export async function createCustomer(
     };
   }
 
-  // A meghívó e-mail csak egyéni SMTP-vel megy ki valódi címekre. Ha elszáll,
-  // a vásárló akkor is létrejött: a „Belépő link” gombbal kézzel pótolható.
+  // FIGYELEM: ez akkor is sikerrel tér vissza, ha a levél sosem érkezik meg.
+  // Egyéni SMTP nélkül a Supabase beépített küldője a team-en kívüli címekre
+  // csendben elnyeli a levelet – hibát nem kapunk, tehát ígérni sem szabad,
+  // hogy megjött. Ezért utal a visszajelzés a „Belépő link” gombra.
   const admin = createAdminClient();
   const { data: invited, error: inviteError } =
     await admin.auth.admin.inviteUserByEmail(email, {
@@ -145,7 +147,7 @@ export async function createCustomer(
 
   revalidatePath("/admin");
   return {
-    message: `${fullName} felvéve, a meghívó e-mail elment ide: ${email}`,
+    message: `${fullName} felvéve, a meghívó e-mail kiküldve ide: ${email}. Ha pár percen belül nem érkezik meg, küldd át neki a „Belépő link” gombbal.`,
   };
 }
 

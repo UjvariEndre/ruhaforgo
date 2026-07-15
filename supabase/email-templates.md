@@ -52,12 +52,18 @@ URL Configuration. A sablonok ezt fűzik a link elejére.
 
 **Egyéni SMTP kötelező.** A Supabase docs szerint: *"Unless you configure a
 custom SMTP server for your project, Supabase Auth will refuse to deliver
-messages to addresses that are not part of the project's team."* Vagyis
-beállítás nélkül csak a saját címedre megy ki levél, minden valódi vásárlónál
-néma kudarc. Dashboard → Authentication → Emails → SMTP Settings. A
-`ruhaforgo.com` domain már a tiéd, szóval pl. a Resend domain-hitelesítése
-menni fog. Az e-mail rate limit egyéni SMTP-vel 30 új felhasználó/óra
-(állítható), ami bőven elég.
+messages to addresses that are not part of the project's team."*
+
+Fontos, hogy ez **csendes** kudarc: kipróbáltuk, és a `inviteUserByEmail` egy
+team-en kívüli címre is **hiba nélkül, sikerrel tér vissza**, az auth-napló is
+`mail.send`-et ír – csak a levél nem érkezik meg. Kódból tehát nem lehet
+észrevenni. (A naplóban a `mail_from` árulkodik: `noreply@mail.app.supabase.io`
+= beépített küldő, nincs egyéni SMTP.)
+
+Dashboard → Authentication → Emails → SMTP Settings. A `ruhaforgo.com` domain
+már a tiéd, szóval pl. a Resend domain-hitelesítése menni fog. Az e-mail rate
+limit egyéni SMTP-vel 30 új felhasználó/óra (állítható), ami bőven elég. A
+beépített küldő ennél jóval szigorúbb, és a docs szerint nem éles használatra van.
 
 Amíg ez nincs kész, az admin felület „Belépő link” gombja pótolja: az nem küld
 e-mailt, csak legenerálja a linket, amit Tündi átküld WhatsAppon vagy SMS-ben.
