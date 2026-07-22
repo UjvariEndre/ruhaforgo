@@ -134,10 +134,10 @@ export default async function AdminPage({
 
       {/* Vásárlólista */}
       <h2 className="mb-3 text-sm font-medium text-muted">
-        Vásárlók ({profiles?.length ?? 0})
+        Vásárlók ({customers.length})
       </h2>
       <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-surface px-4">
-        {(profiles ?? []).map((p) => (
+        {customers.map((p) => (
           <li
             key={p.id}
             className="flex items-start justify-between gap-4 py-3"
@@ -145,11 +145,6 @@ export default async function AdminPage({
             <div className="min-w-0">
               <p className="text-sm">
                 {p.full_name}
-                {p.role === "admin" && (
-                  <span className="ml-2 rounded bg-brand-ochre/20 px-1.5 py-0.5 text-xs text-brand-brown">
-                    admin
-                  </span>
-                )}
                 {!p.email && (
                   <span className="ml-2 rounded bg-border/60 px-1.5 py-0.5 text-xs text-muted">
                     csak telefonos
