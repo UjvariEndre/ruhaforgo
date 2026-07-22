@@ -32,7 +32,7 @@ export default async function ForgotPasswordPage({
           <p className="rounded-md bg-brand-green/10 px-3 py-2 text-sm text-brand-green-dark">
             Ha ehhez a címhez tartozik fiók, elküldtük rá a jelszó-beállító
             linket. Nézd meg a leveleidet – ha nem érkezik meg pár percen belül,
-            szólj Tündinek, és küld egy linket kézzel.
+            szólj Tündének, és küld egy linket kézzel.
           </p>
         ) : (
           <>

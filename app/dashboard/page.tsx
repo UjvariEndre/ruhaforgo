@@ -1,6 +1,6 @@
+import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { signOut } from "../login/actions";
 
 export default async function DashboardPage() {
@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   // profilhoz kötés valamiért elmaradt, itt ne UUID-hibával szálljon el.
   if (!profile) {
     redirect(
-      `/login?error=${encodeURIComponent("Ehhez a fiókhoz nem tartozik vásárló. Szólj Tündinek.")}`,
+      `/login?error=${encodeURIComponent("Ehhez a fiókhoz nem tartozik vásárló. Szólj Tündének.")}`,
     );
   }
 

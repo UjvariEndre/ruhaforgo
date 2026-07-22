@@ -1,6 +1,6 @@
+import { createClient } from "@/lib/supabase/server";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 
 // A meghívó / jelszó-visszaállító e-mailben lévő link ide érkezik: ellenőrzi a
 // tokent, beállítja a session-t, majd továbbenged (alapesetben a jelszó-
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.redirect(
     new URL(
-      `/login?error=${encodeURIComponent("A link lejárt vagy érvénytelen. Kérj újat, vagy szólj Tündinek.")}`,
+      `/login?error=${encodeURIComponent("A link lejárt vagy érvénytelen. Kérj újat, vagy szólj Tündének.")}`,
       request.url,
     ),
   );

@@ -77,7 +77,7 @@ export default async function LoginPage({
           </Link>
           <p className="text-xs text-muted">
             Még nincs fiókod? A pontgyűjtő fiókot a boltban hozzuk létre neked –
-            szólj Tündinek, és küldünk egy jelszó-beállító linket.
+            szólj Tündének, és küldünk egy jelszó-beállító linket.
           </p>
         </div>
       </div>
