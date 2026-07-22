@@ -15,6 +15,7 @@ export default async function DashboardPage() {
     .from("profiles")
     .select("id, full_name, role")
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
   // Fiók profil nélkül nem fordulhat elő normál működés közben, de ha a

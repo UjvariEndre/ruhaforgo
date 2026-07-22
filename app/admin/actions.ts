@@ -37,7 +37,15 @@ async function siteOrigin() {
 // ---------------------------------------------------------------------------
 // Pont jóváírása / levonása
 // ---------------------------------------------------------------------------
-export async function adjustPoints(formData: FormData) {
+export type AdjustPointsState = {
+  error?: string;
+  message?: string;
+};
+
+export async function adjustPoints(
+  _prevState: AdjustPointsState,
+  formData: FormData,
+): Promise<AdjustPointsState> {
   const { supabase, adminProfileId } = await requireAdmin();
 
   const profileId = String(formData.get("profile_id") ?? "");
@@ -45,12 +53,9 @@ export async function adjustPoints(formData: FormData) {
   const type = String(formData.get("type") ?? "credit"); // credit | debit
   const reason = String(formData.get("reason") ?? "").trim();
 
-  const fail = (msg: string) =>
-    redirect(`/admin?error=${encodeURIComponent(msg)}`);
-
-  if (!profileId) fail("Nincs kiválasztva vásárló.");
+  if (!profileId) return { error: "Nincs kiválasztva vásárló." };
   if (!Number.isInteger(amount) || amount <= 0)
-    fail("Az összegnek pozitív egész számnak kell lennie.");
+    return { error: "Az összegnek pozitív egész számnak kell lennie." };
 
   const delta = type === "debit" ? -amount : amount;
 
@@ -63,7 +68,9 @@ export async function adjustPoints(formData: FormData) {
       .single();
     const balance = balanceRow?.balance ?? 0;
     if (balance + delta < 0)
-      fail(`Nincs elég pont (egyenleg: ${balance}, levonás: ${amount}).`);
+      return {
+        error: `Nincs elég pont (egyenleg: ${balance}, levonás: ${amount}).`,
+      };
   }
 
   const { error } = await supabase.from("point_transactions").insert({
@@ -73,10 +80,13 @@ export async function adjustPoints(formData: FormData) {
     created_by: adminProfileId,
   });
 
-  if (error) fail(error.message);
+  if (error) return { error: error.message };
 
-  revalidatePath("/admin");
-  redirect("/admin?message=ok");
+  // A details oldal (egyenleg + előzmények) helyben frissül, redirect nélkül.
+  revalidatePath(`/admin/${profileId}`);
+  return {
+    message: delta < 0 ? `${amount} pont levonva.` : `${amount} pont jóváírva.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -217,4 +227,97 @@ export async function createLoginLink(
   link.searchParams.set("next", "/auth/jelszo");
 
   return { link: link.toString(), forName: profile.full_name };
+}
+
+// ---------------------------------------------------------------------------
+// Vásárló szerkesztése
+// ---------------------------------------------------------------------------
+export type UpdateCustomerState = {
+  error?: string;
+  message?: string;
+};
+
+export async function updateCustomer(
+  _prevState: UpdateCustomerState,
+  formData: FormData,
+): Promise<UpdateCustomerState> {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  const fullName = String(formData.get("full_name") ?? "").trim();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const phone = String(formData.get("phone") ?? "").trim();
+
+  if (!id) return { error: "Hiányzó azonosító." };
+  if (!fullName) return { error: "A név kötelező." };
+  if (!email && !phone)
+    return { error: "E-mail vagy telefonszám közül legalább az egyik kell." };
+
+  const { data: current, error: readError } = await supabase
+    .from("profiles")
+    .select("id, user_id, email")
+    .eq("id", id)
+    .single();
+  if (readError || !current) return { error: "Nincs ilyen vásárló." };
+
+  const emailChanged = (current.email ?? "") !== email;
+
+  // Fiókkal rendelkező vásárlónál az e-mail a belépéshez kell – nem törölhető.
+  if (current.user_id && !email)
+    return {
+      error: "Ennek a vásárlónak van fiókja – az e-mail cím nem törölhető.",
+    };
+
+  // Ha van fiók és változott az e-mail, az auth-oldalt is szinkronizálni kell,
+  // különben a belépés és a „Belépő link” a régi címmel maradna. Az
+  // `email_confirm` azonnal érvényesíti, megerősítő levél nélkül.
+  if (current.user_id && emailChanged) {
+    const admin = createAdminClient();
+    const { error: authError } = await admin.auth.admin.updateUserById(
+      current.user_id,
+      { email, email_confirm: true },
+    );
+    if (authError)
+      return {
+        error: `Az e-mail módosítása a fiókon nem sikerült: ${authError.message}`,
+      };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ full_name: fullName, email: email || null, phone: phone || null })
+    .eq("id", id);
+
+  if (error) {
+    if (error.code === "23505")
+      return { error: `Ezzel az e-mail címmel már van vásárló: ${email}` };
+    return { error: error.message };
+  }
+
+  revalidatePath("/admin");
+  return { message: "Mentve." };
+}
+
+// ---------------------------------------------------------------------------
+// Vásárló törlése (puha törlés – visszaállítható)
+// ---------------------------------------------------------------------------
+// Nem töröljük a sort: csak a `deleted_at`-et állítjuk be. Így a véletlenül
+// törölt vásárló (és a teljes pontelőzménye) visszahozható, az auth-fiókja is
+// érintetlen marad. Az aktív listákból a `deleted_at is null` szűrő rejti el.
+export async function deleteCustomer(formData: FormData) {
+  const { supabase } = await requireAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect(`/admin?error=${encodeURIComponent("Hiányzó azonosító.")}`);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath("/admin");
+  redirect("/admin?message=deleted");
 }

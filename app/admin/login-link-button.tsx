@@ -49,7 +49,7 @@ export default function LoginLinkButton({
               readOnly
               value={state.link}
               onFocus={(e) => e.currentTarget.select()}
-              className="flex-1 rounded border border-border bg-surface px-2 py-1 text-xs"
+              className="flex-1 rounded border border-border bg-white px-2 py-1 text-xs"
             />
             <button
               type="button"

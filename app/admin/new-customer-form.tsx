@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef } from "react";
 import { createCustomer, type CreateCustomerState } from "./actions";
 
 const fieldClass =
-  "rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-green";
+  "rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-green";
 
 export default function NewCustomerForm() {
   const [state, formAction, pending] = useActionState<

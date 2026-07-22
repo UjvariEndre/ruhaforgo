@@ -31,10 +31,15 @@ create table if not exists public.profiles (
   role       text not null default 'customer'
              check (role in ('customer', 'admin')),
   created_at timestamptz not null default now(),
+  -- Puha törlés: NULL = aktív. Kitöltve = törölve, de az admin visszaállíthatja.
+  deleted_at timestamptz,
   -- Az e-mail az elsődleges, de telefonszám is elég: e-mail nélkül a vásárló
   -- nem tud belépni, a pontjait Tündi vezeti.
   constraint profiles_email_or_phone check (email is not null or phone is not null)
 );
+
+-- Régebbi adatbázisokhoz: az oszlop utólagos felvétele (idempotens).
+alter table public.profiles add column if not exists deleted_at timestamptz;
 
 comment on table public.profiles is 'Vásárlók. user_id IS NULL → nincs belépésre alkalmas fiók, csak Tündi kezeli.';
 
@@ -70,7 +75,8 @@ stable
 security definer
 set search_path = public
 as $$
-  select id from public.profiles where user_id = auth.uid();
+  select id from public.profiles
+  where user_id = auth.uid() and deleted_at is null;
 $$;
 
 create or replace function public.is_admin()

@@ -15,7 +15,7 @@ export default async function LoginPage({
   const sp = await searchParams;
 
   const inputClass =
-    "rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-green";
+    "rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand-green";
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
