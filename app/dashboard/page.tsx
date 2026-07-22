@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "../login/actions";
@@ -26,6 +25,10 @@ export default async function DashboardPage() {
     );
   }
 
+  // Az adminnak a dashboard (saját egyenleg) értelmetlen – ő a kezelőfelületet
+  // használja. Minden belépési út ide fut be, ezért itt egy helyen tereljük el.
+  if (profile.role === "admin") redirect("/admin");
+
   const { data: balanceRow } = await supabase
     .from("user_point_balances")
     .select("balance")
@@ -39,7 +42,6 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false });
 
   const balance = balanceRow?.balance ?? 0;
-  const isAdmin = profile.role === "admin";
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
@@ -56,14 +58,6 @@ export default async function DashboardPage() {
             <h1 className="text-lg font-semibold">
               Szia, {profile.full_name}!
             </h1>
-            {isAdmin && (
-              <Link
-                href="/admin"
-                className="text-sm font-medium text-brand-green hover:text-brand-green-dark hover:underline"
-              >
-                → Admin felület
-              </Link>
-            )}
           </div>
         </div>
         <form action={signOut}>

@@ -1,7 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { signOut } from "../login/actions";
 import { adjustPoints } from "./actions";
 import LoginLinkButton from "./login-link-button";
 import NewCustomerForm from "./new-customer-form";
@@ -42,6 +42,9 @@ export default async function AdminPage({
     (balances ?? []).map((b) => [b.profile_id, b.balance]),
   );
 
+  // Pontot csak vásárlónak írunk jóvá – az adminok kimaradnak a legördülőből.
+  const customers = (profiles ?? []).filter((p) => p.role !== "admin");
+
   const fieldClass =
     "rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-green";
 
@@ -58,12 +61,11 @@ export default async function AdminPage({
           />
           <h1 className="text-lg font-semibold">RuhaForgó pontok kezelése</h1>
         </div>
-        <Link
-          href="/dashboard"
-          className="text-sm text-muted hover:text-foreground"
-        >
-          ← Vissza
-        </Link>
+        <form action={signOut}>
+          <button className="text-sm text-muted hover:text-foreground">
+            Kilépés
+          </button>
+        </form>
       </header>
 
       <NewCustomerForm />
@@ -92,7 +94,7 @@ export default async function AdminPage({
             <option value="" disabled>
               Válassz vásárlót…
             </option>
-            {(profiles ?? []).map((p) => (
+            {customers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.full_name} — {balanceMap.get(p.id) ?? 0} pont
               </option>
