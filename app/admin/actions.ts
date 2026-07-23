@@ -262,6 +262,11 @@ export async function updateCustomer(
     .single();
   if (readError || !current) return { error: "Nincs ilyen vásárló." };
 
+  // Az e-mail nélkül felvett vásárlónak nincs auth-fiókja. Amikor most kap
+  // először címet, ugyanaz jár neki, mint ha e-maillel vettük volna fel:
+  // meghívó levél + a fiók hozzákötése a profilhoz.
+  const needsInvite = !current.user_id && !!email;
+
   const emailChanged = (current.email ?? "") !== email;
 
   // Fiókkal rendelkező vásárlónál az e-mail a belépéshez kell – nem törölhető.
@@ -297,7 +302,35 @@ export async function updateCustomer(
   }
 
   revalidatePath("/admin");
-  return { message: "Mentve." };
+
+  if (!needsInvite) return { message: "Mentve." };
+
+  // Ugyanaz a fenntartás, mint a felvételnél: a sikeres válasz nem jelenti,
+  // hogy a levél meg is érkezett – ezért utal a visszajelzés a „Belépő link”
+  // gombra.
+  const admin = createAdminClient();
+  const { data: invited, error: inviteError } =
+    await admin.auth.admin.inviteUserByEmail(email, {
+      data: { full_name: fullName },
+      redirectTo: `${await siteOrigin()}/auth/confirm?next=/auth/jelszo`,
+    });
+
+  if (inviteError) {
+    return {
+      message: `Mentve, de a meghívó e-mail nem ment ki (${inviteError.message}). Küldd át neki a „Belépő link” gombbal.`,
+    };
+  }
+
+  await supabase
+    .from("profiles")
+    .update({ user_id: invited.user.id })
+    .eq("id", id);
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/${id}`);
+  return {
+    message: `Mentve, a meghívó e-mail kiküldve ide: ${email}. Ha pár percen belül nem érkezik meg, küldd át neki a „Belépő link” gombbal.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
