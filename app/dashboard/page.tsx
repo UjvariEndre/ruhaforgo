@@ -1,9 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "../login/actions";
 
-export default async function DashboardPage() {
+type SearchParams = Promise<{ page?: string }>;
+
+const PAGE_SIZE = 20;
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const sp = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -36,13 +46,23 @@ export default async function DashboardPage() {
     .eq("profile_id", profile.id)
     .single();
 
-  const { data: transactions } = await supabase
+  // Az előzmény szerver-oldali lapozással jön: a sorrend marad a legfrissebb
+  // elöl, csak a megjelenített szelet szűkül.
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+
+  const { data: transactions, count } = await supabase
     .from("point_transactions")
-    .select("id, delta, reason, created_at")
+    .select("id, delta, reason, created_at", { count: "exact" })
     .eq("profile_id", profile.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(from, from + PAGE_SIZE - 1);
 
   const balance = balanceRow?.balance ?? 0;
+  const total = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const pageHref = (p: number) => (p > 1 ? `/dashboard?page=${p}` : "/dashboard");
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
@@ -74,7 +94,9 @@ export default async function DashboardPage() {
         <p className="text-sm text-white/70">pont</p>
       </section>
 
-      <h2 className="mb-3 text-sm font-medium text-muted">Előzmények</h2>
+      <h2 className="mb-3 text-sm font-medium text-muted">
+        Előzmények ({total})
+      </h2>
       {transactions && transactions.length > 0 ? (
         <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-surface px-4">
           {transactions.map((t) => (
@@ -97,6 +119,39 @@ export default async function DashboardPage() {
         </ul>
       ) : (
         <p className="text-sm text-muted">Még nincs pontmozgásod.</p>
+      )}
+
+      {/* Lapozás */}
+      {totalPages > 1 && (
+        <nav className="mt-4 flex items-center justify-between text-sm">
+          {page > 1 ? (
+            <Link
+              href={pageHref(page - 1)}
+              className="rounded-md border border-border px-3 py-1.5 text-muted hover:border-brand-green hover:text-brand-green"
+            >
+              ← Előző
+            </Link>
+          ) : (
+            <span className="rounded-md border border-border px-3 py-1.5 text-border">
+              ← Előző
+            </span>
+          )}
+          <span className="text-muted">
+            {page} / {totalPages} oldal
+          </span>
+          {page < totalPages ? (
+            <Link
+              href={pageHref(page + 1)}
+              className="rounded-md border border-border px-3 py-1.5 text-muted hover:border-brand-green hover:text-brand-green"
+            >
+              Következő →
+            </Link>
+          ) : (
+            <span className="rounded-md border border-border px-3 py-1.5 text-border">
+              Következő →
+            </span>
+          )}
+        </nav>
       )}
     </main>
   );
