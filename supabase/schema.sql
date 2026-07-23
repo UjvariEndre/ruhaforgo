@@ -47,6 +47,59 @@ comment on table public.profiles is 'Vásárlók. user_id IS NULL → nincs bel�
 create unique index if not exists profiles_email_unique_idx
   on public.profiles (lower(email)) where email is not null;
 
+-- A telefonszám kanonikus alakja E.164-ben (+36301807725). Ezen megy az
+-- egyediség és a keresés, függetlenül attól, hogy 06, +36, 0036, szóközös vagy
+-- kötőjeles formában írták be. A `profiles.phone` oszlop az olvasható alakot
+-- tárolja (+36 30 180 7725), ezt az alkalmazás állítja elő.
+--
+-- A párja TypeScriptben: phoneKey()/formatHuPhone() a lib/phone.ts-ben.
+-- Ha az egyiket módosítod, a másikat is vezesd át.
+create or replace function public.hu_phone_e164(raw text)
+returns text
+language sql
+immutable
+as $$
+  with d as (
+    select regexp_replace(coalesce(raw, ''), '[^0-9]', '', 'g') as digits
+  ),
+  n as (
+    select digits, case
+      -- 0036… nemzetközi előhívó
+      when digits like '0036%' then substr(digits, 5)
+      -- 36… országhívó (36 + 8 vagy 9 jegyű belföldi szám)
+      when digits like '36%' and length(digits) in (10, 11) then substr(digits, 3)
+      -- 06… belföldi előhívó
+      when digits like '06%' then substr(digits, 3)
+      -- előhívó nélkül: mobil 9 jegy, vezetékes 8 jegy (1+7 vagy körzet+6)
+      when length(digits) in (8, 9) then digits
+    end as nsn
+    from d
+  )
+  select case
+    when nsn is not null and length(nsn) in (8, 9) then '+36' || nsn
+    -- Nem ismerjük fel magyar számként (pl. külföldi): a puszta számjegyek a
+    -- kulcs, így legalább az azonos beírások ütköznek egymással.
+    else nullif(digits, '')
+  end
+  from n;
+$$;
+
+alter table public.profiles
+  add column if not exists phone_e164 text
+  generated always as (public.hu_phone_e164(phone)) stored;
+
+create index if not exists profiles_phone_e164_idx
+  on public.profiles (phone_e164)
+  where phone_e164 is not null;
+
+-- Egy telefonszám csak egy aktív vásárlóhoz tartozhat. A törölt (puha törölt)
+-- vásárló száma újra kiadható – ezért a `deleted_at is null` szűrő. Ugyanez a
+-- viselkedés az alkalmazásban is (findPhoneOwner, app/admin/actions.ts): ott a
+-- szép hibaüzenetért, itt a garanciáért.
+create unique index if not exists profiles_phone_unique_idx
+  on public.profiles (phone_e164)
+  where phone_e164 is not null and deleted_at is null;
+
 -- ---------------------------------------------------------------------------
 -- 2. POINT TRANSACTIONS (ledger)
 -- ---------------------------------------------------------------------------

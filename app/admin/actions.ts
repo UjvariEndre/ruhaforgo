@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { formatHuPhone, phoneKey } from "@/lib/phone";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,6 +26,44 @@ async function requireAdmin() {
   if (me?.role !== "admin") redirect("/dashboard");
 
   return { supabase, adminProfileId: me.id };
+}
+
+// Ugyanaz a telefonszám ne tartozhasson két aktív vásárlóhoz. Az összehasonlítás
+// a kanonikus E.164 kulcson megy, így a 06 / +36 / 0036 / szóköz / kötőjel
+// változatok mind ugyanoda mutatnak. Törölt vásárló száma újra kiadható.
+// A garanciát a `profiles_phone_unique_idx` adja – ez itt a szép hibaüzenetért.
+async function findPhoneOwner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  phone: string,
+  exceptProfileId?: string,
+) {
+  const key = phoneKey(phone);
+  if (!key) return null;
+
+  let query = supabase
+    .from("profiles")
+    .select("id, full_name")
+    .eq("phone_e164", key)
+    .is("deleted_at", null)
+    .limit(1);
+  if (exceptProfileId) query = query.neq("id", exceptProfileId);
+
+  const { data } = await query;
+  return data?.[0] ?? null;
+}
+
+// A 23505 (unique violation) az e-mail és a telefon indexéről is jöhet – az
+// index nevéből derül ki, melyikről. A `findPhoneOwner` normál esetben előbb
+// elkapja a telefont, ez a hálója két egyszerre futó mentés esetére.
+function duplicateMessage(
+  error: { code?: string; message?: string },
+  email: string,
+  phone: string,
+) {
+  if (error.code !== "23505") return null;
+  if (error.message?.includes("profiles_phone_unique_idx"))
+    return `Ezzel a telefonszámmal már van vásárló: ${phone}`;
+  return `Ezzel az e-mail címmel már van vásárló: ${email}`;
 }
 
 async function siteOrigin() {
@@ -107,11 +146,18 @@ export async function createCustomer(
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
-  const phone = String(formData.get("phone") ?? "").trim();
+  // Egységes +36-os alakban tároljuk, bárhogy is írták be.
+  const phone = formatHuPhone(String(formData.get("phone") ?? ""));
 
   if (!fullName) return { error: "A név kötelező." };
   if (!email && !phone)
     return { error: "E-mail vagy telefonszám közül legalább az egyik kell." };
+
+  if (phone) {
+    const owner = await findPhoneOwner(supabase, phone);
+    if (owner)
+      return { error: `Ezzel a telefonszámmal már van vásárló: ${owner.full_name}` };
+  }
 
   const { data: profile, error } = await supabase
     .from("profiles")
@@ -120,9 +166,8 @@ export async function createCustomer(
     .single();
 
   if (error) {
-    if (error.code === "23505")
-      return { error: `Ezzel az e-mail címmel már van vásárló: ${email}` };
-    return { error: error.message };
+    const duplicate = duplicateMessage(error, email, phone);
+    return { error: duplicate ?? error.message };
   }
 
   revalidatePath("/admin");
@@ -248,7 +293,8 @@ export async function updateCustomer(
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
-  const phone = String(formData.get("phone") ?? "").trim();
+  // Egységes +36-os alakban tároljuk, bárhogy is írták be.
+  const phone = formatHuPhone(String(formData.get("phone") ?? ""));
 
   if (!id) return { error: "Hiányzó azonosító." };
   if (!fullName) return { error: "A név kötelező." };
@@ -261,6 +307,12 @@ export async function updateCustomer(
     .eq("id", id)
     .single();
   if (readError || !current) return { error: "Nincs ilyen vásárló." };
+
+  if (phone) {
+    const owner = await findPhoneOwner(supabase, phone, id);
+    if (owner)
+      return { error: `Ezzel a telefonszámmal már van vásárló: ${owner.full_name}` };
+  }
 
   // Az e-mail nélkül felvett vásárlónak nincs auth-fiókja. Amikor most kap
   // először címet, ugyanaz jár neki, mint ha e-maillel vettük volna fel:
@@ -296,9 +348,8 @@ export async function updateCustomer(
     .eq("id", id);
 
   if (error) {
-    if (error.code === "23505")
-      return { error: `Ezzel az e-mail címmel már van vásárló: ${email}` };
-    return { error: error.message };
+    const duplicate = duplicateMessage(error, email, phone);
+    return { error: duplicate ?? error.message };
   }
 
   revalidatePath("/admin");
